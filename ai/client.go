@@ -13,9 +13,9 @@ import (
 )
 
 type Client interface {
-	Chat(input string) error
-	TextToSpeech(input string) error
-	Transcribe(audio io.Reader) error
+	Chat(string) (ChatResponse, error)
+	TextToSpeech(string) (io.ReadCloser, error)
+	Transcribe(io.ReadCloser) (TranscriptResponse, error)
 }
 
 type OpenAI struct {
