@@ -3,6 +3,7 @@ package ai
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -18,58 +19,68 @@ type Client interface {
 }
 
 type OpenAI struct {
-	APIKey          string
-	BaseURL         string
-	ChatModel       string
-	TranscriptModel string
-	TTSModel        string
-	TTSVoice        string
+	APIKey             string
+	BaseURL            string
+	ChatModel          string
+	TranscriptModel    string
+	TranscriptLanguage string
+	TTSModel           string
+	TTSVoice           string
 }
 
 const (
-	baseURL         = "https://api.openai.com/v1"
-	chatModel       = "gpt-4o"
-	transcriptModel = "whisper-1"
-	ttsModel        = "tts-1"
-	ttsVoice        = "nova"
+	baseURL            = "https://api.openai.com/v1"
+	chatModel          = "gpt-4o"
+	transcriptModel    = "whisper-1"
+	transcriptLanguage = "id"
+	ttsModel           = "tts-1"
+	ttsVoice           = "nova"
+
+	defaultSystemContent = "You are an interviewer."
 )
 
 // NewOpenAI digunakan untuk membuat instance client OpenAI
 func NewOpenAI(apiKey string) *OpenAI {
 	return &OpenAI{
-		APIKey:          apiKey,
-		BaseURL:         baseURL,
-		ChatModel:       chatModel,
-		TranscriptModel: transcriptModel,
-		TTSModel:        ttsModel,
-		TTSVoice:        ttsVoice,
+		APIKey:             apiKey,
+		BaseURL:            baseURL,
+		ChatModel:          chatModel,
+		TranscriptModel:    transcriptModel,
+		TTSModel:           ttsModel,
+		TTSVoice:           ttsVoice,
+		TranscriptLanguage: transcriptLanguage,
 	}
 }
 
 // Chat digunakan untuk melakukan chat
-func (c *OpenAI) Chat(input string) error {
+func (c *OpenAI) Chat(message string) (ChatResponse, error) {
 	url, err := url.JoinPath(c.BaseURL, "/engines/chat/completions")
 	if err != nil {
-		return err
+		return ChatResponse{}, err
 	}
 
-	body := bytes.NewBuffer([]byte(fmt.Sprintf(`{
-		"model": "%s",
-		"messages": [
+	chatReq := ChatRequest{
+		Model: c.ChatModel,
+		Messages: []ChatMessage{
 			{
-				"role": "system",
-				"content": "You are an interviewer."
+				Role:    ROLE_SYSTEM,
+				Content: defaultSystemContent,
 			},
 			{
-				"role": "user",
-				"content": "%s"
-			}
-		]
-	}`, c.ChatModel, input)))
+				Role:    ROLE_USER,
+				Content: message,
+			},
+		},
+	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body)
+	body, err := json.Marshal(chatReq)
 	if err != nil {
-		return err
+		return ChatResponse{}, err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		return ChatResponse{}, err
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
@@ -77,18 +88,23 @@ func (c *OpenAI) Chat(input string) error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return ChatResponse{}, err
 	}
-	defer resp.Body.Close()
 
-	return nil
+	var chatResp ChatResponse
+	err = unmarshalJSONResponse(resp, &chatResp)
+	if err != nil {
+		return ChatResponse{}, err
+	}
+
+	return chatResp, nil
 }
 
 // TextToSpeech digunakan untuk mengubah teks menjadi suara
-func (c *OpenAI) TextToSpeech(input string) error {
+func (c *OpenAI) TextToSpeech(input string) (io.ReadCloser, error) {
 	url, err := url.JoinPath(c.BaseURL, "/audio/speech")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	body := bytes.NewBuffer([]byte(fmt.Sprintf(`{
@@ -99,7 +115,7 @@ func (c *OpenAI) TextToSpeech(input string) error {
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
@@ -107,60 +123,110 @@ func (c *OpenAI) TextToSpeech(input string) error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer resp.Body.Close()
+	respBody, err := getResponseBody(resp)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil
+	return respBody, nil
 }
 
 // SpeechToText digunakan untuk mengubah suara menjadi teks
-func (c *OpenAI) Transcribe(audio io.Reader) error {
+func (c *OpenAI) Transcribe(audio io.ReadCloser) (TranscriptResponse, error) {
+	if audio == nil {
+		return TranscriptResponse{}, fmt.Errorf("audio is nil")
+	}
+	defer audio.Close()
+
 	url, err := url.JoinPath(c.BaseURL, "/audio/transcriptions")
 	if err != nil {
-		return err
+		return TranscriptResponse{}, err
 	}
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	// Add the audio file to the multipart message
 	part, err := writer.CreateFormFile("file", "audio.wav")
 	if err != nil {
-		panic(err)
+		return TranscriptResponse{}, err
 	}
 
-	// Copy the audio file to the part
 	_, err = io.Copy(part, audio)
 	if err != nil {
-		panic(err)
+		return TranscriptResponse{}, err
 	}
 
-	// Add the model field
-	err = writer.WriteField("model", "whisper-1")
+	err = writer.WriteField("model", c.TranscriptModel)
 	if err != nil {
-		panic(err)
+		return TranscriptResponse{}, err
 	}
 
-	// Close the writer to finalize the multipart message
+	err = writer.WriteField("language", c.TranscriptLanguage)
+	if err != nil {
+		return TranscriptResponse{}, err
+	}
+
 	err = writer.Close()
 	if err != nil {
-		panic(err)
+		return TranscriptResponse{}, err
 	}
 
-	// Create a new HTTP request with the appropriate headers
-	req, err := http.NewRequest("POST", url, body)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body)
 	if err != nil {
-		panic(err)
+		return TranscriptResponse{}, err
 	}
+
 	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENAI_API_KEY"))
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Content-Type", "multipart/form-data")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		return TranscriptResponse{}, err
+	}
+
+	if resp == nil || resp.Body == nil {
+		return TranscriptResponse{}, fmt.Errorf("response is nil")
+	}
+
+	var transcriptResp TranscriptResponse
+	err = unmarshalJSONResponse(resp, &transcriptResp)
+	if err != nil {
+		return TranscriptResponse{}, err
+	}
+
+	return transcriptResp, nil
+}
+
+// getResponseBody digunakan untuk mendapatkan response body dari http.Response
+func getResponseBody(resp *http.Response) (io.ReadCloser, error) {
+	if resp == nil || resp.Body == nil {
+		return nil, fmt.Errorf("response is nil")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	return resp.Body, nil
+}
+
+// unmarshalJSONResponse digunakan untuk mengubah response dari byte menjadi struct
+func unmarshalJSONResponse(resp *http.Response, v interface{}) error {
+	respBody, err := getResponseBody(resp)
+	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	if respBody == nil {
+		return fmt.Errorf("response body is nil")
+	}
+	defer respBody.Close()
 
-	return nil
+	respByte, err := io.ReadAll(respBody)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(respByte, v)
 }
