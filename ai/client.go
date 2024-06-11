@@ -15,7 +15,7 @@ import (
 type Client interface {
 	Chat(string) (ChatResponse, error)
 	TextToSpeech(string) (io.ReadCloser, error)
-	Transcribe(io.ReadCloser) (TranscriptResponse, error)
+	Transcribe(*os.File) (TranscriptResponse, error)
 }
 
 type OpenAI struct {
@@ -32,7 +32,7 @@ const (
 	baseURL            = "https://api.openai.com/v1"
 	chatModel          = "gpt-4o"
 	transcriptModel    = "whisper-1"
-	transcriptLanguage = "id"
+	transcriptLanguage = "en"
 	ttsModel           = "tts-1"
 	ttsVoice           = "nova"
 
@@ -134,11 +134,16 @@ func (c *OpenAI) TextToSpeech(input string) (io.ReadCloser, error) {
 }
 
 // SpeechToText digunakan untuk mengubah suara menjadi teks
-func (c *OpenAI) Transcribe(audio io.ReadCloser) (TranscriptResponse, error) {
-	if audio == nil {
+func (c *OpenAI) Transcribe(file *os.File) (TranscriptResponse, error) {
+	if file == nil {
 		return TranscriptResponse{}, fmt.Errorf("audio is nil")
 	}
-	defer audio.Close()
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return TranscriptResponse{}, err
+	}
 
 	url, err := url.JoinPath(c.BaseURL, "/audio/transcriptions")
 	if err != nil {
@@ -148,12 +153,12 @@ func (c *OpenAI) Transcribe(audio io.ReadCloser) (TranscriptResponse, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	part, err := writer.CreateFormFile("file", "audio.wav")
+	part, err := writer.CreateFormFile("file", info.Name())
 	if err != nil {
 		return TranscriptResponse{}, err
 	}
 
-	_, err = io.Copy(part, audio)
+	_, err = io.Copy(part, file)
 	if err != nil {
 		return TranscriptResponse{}, err
 	}
@@ -178,8 +183,8 @@ func (c *OpenAI) Transcribe(audio io.ReadCloser) (TranscriptResponse, error) {
 		return TranscriptResponse{}, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENAI_API_KEY"))
-	req.Header.Set("Content-Type", "multipart/form-data")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
+	req.Header.Add("Content-Type", writer.FormDataContentType())
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
