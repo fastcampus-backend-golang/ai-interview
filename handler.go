@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
@@ -25,17 +28,7 @@ func NewHandler() *chi.Mux {
 
 		r.Get("/initial", initialChat)
 
-		r.Post("/answer", func(w http.ResponseWriter, r *http.Request) {
-			// read audio as multipart
-
-			// transcribe the audio
-
-			// get chat completion
-
-			// create speech from the chat completion
-
-			// send response
-		})
+		r.Post("/answer", answerChat)
 	})
 
 	// health check
@@ -47,7 +40,7 @@ func NewHandler() *chi.Mux {
 	return r
 }
 
-func initialChat(w http.ResponseWriter, r *http.Request) {
+func initialChat(w http.ResponseWriter, req *http.Request) {
 	initialText, err := ai.GetInitialText()
 	if err != nil {
 		http.Error(w, "failed to get initial text", http.StatusInternalServerError)
@@ -64,6 +57,78 @@ func initialChat(w http.ResponseWriter, r *http.Request) {
 		Answer: Response{
 			Text:  initialText,
 			Audio: initialAudio,
+		},
+	}
+
+	resp, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, "failed to marshal response", http.StatusInternalServerError)
+		return
+	}
+
+	// write the response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp)
+}
+
+func answerChat(w http.ResponseWriter, req *http.Request) {
+	// read audio as multipart
+	file, fileHeader, err := req.FormFile("file")
+	if err != nil {
+		http.Error(w, "failed to read file", http.StatusInternalServerError)
+		return
+	}
+	if fileHeader == nil {
+		http.Error(w, "no file uploaded", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	client := ai.NewOpenAI(os.Getenv("OPENAI_API"))
+
+	// transcribe the audio
+	transcript, err := client.Transcribe(file, fileHeader.Filename)
+	if err != nil {
+		http.Error(w, "failed to transcribe audio", http.StatusInternalServerError)
+		return
+	}
+
+	// get chat completion
+	chatCompletion, err := client.Chat(transcript.Text)
+	if err != nil {
+		http.Error(w, "failed to get chat completion", http.StatusInternalServerError)
+		return
+	}
+
+	if len(chatCompletion.Choices) == 0 {
+		http.Error(w, "no chat completion", http.StatusInternalServerError)
+		return
+	}
+
+	// create speech from the chat completion
+	speech, err := client.TextToSpeech(chatCompletion.Choices[0].Message.Content)
+	if err != nil {
+		http.Error(w, "failed to create speech", http.StatusInternalServerError)
+		return
+	}
+
+	// encode the speech to base64
+	speechByte, err := io.ReadAll(speech)
+	if err != nil {
+		http.Error(w, "failed to read speech", http.StatusInternalServerError)
+		return
+	}
+	speechBase64 := base64.StdEncoding.EncodeToString(speechByte)
+
+	// send response
+	response := ChatResponse{
+		Prompt: Response{
+			Text: transcript.Text,
+		},
+		Answer: Response{
+			Text:  chatCompletion.Choices[0].Message.Content,
+			Audio: speechBase64,
 		},
 	}
 
