@@ -44,21 +44,3 @@ func GetInitialText() (string, error) {
 
 	return string(text), nil
 }
-
-func GetSystemPrompt() (string, error) {
-	basedir, err := os.Getwd()
-	if err != nil {
-		log.Printf("error: %v\n", err)
-		return "", err
-	}
-
-	assetPath := filepath.Join(basedir, "ai", "assets", "system.txt")
-
-	text, err := os.ReadFile(assetPath)
-	if err != nil {
-		log.Printf("error: %v\n", err)
-		return "", err
-	}
-
-	return string(text), nil
-}

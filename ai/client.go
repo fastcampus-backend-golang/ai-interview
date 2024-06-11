@@ -9,13 +9,12 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os"
 )
 
 type Client interface {
 	Chat(string) (ChatResponse, error)
 	TextToSpeech(string) (io.ReadCloser, error)
-	Transcribe(*os.File) (TranscriptResponse, error)
+	Transcribe(io.ReadCloser, string) (TranscriptResponse, error)
 }
 
 type OpenAI struct {
@@ -134,16 +133,11 @@ func (c *OpenAI) TextToSpeech(input string) (io.ReadCloser, error) {
 }
 
 // SpeechToText digunakan untuk mengubah suara menjadi teks
-func (c *OpenAI) Transcribe(file *os.File) (TranscriptResponse, error) {
+func (c *OpenAI) Transcribe(file io.ReadCloser, filename string) (TranscriptResponse, error) {
 	if file == nil {
 		return TranscriptResponse{}, fmt.Errorf("audio is nil")
 	}
 	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		return TranscriptResponse{}, err
-	}
 
 	url, err := url.JoinPath(c.BaseURL, "/audio/transcriptions")
 	if err != nil {
@@ -153,7 +147,7 @@ func (c *OpenAI) Transcribe(file *os.File) (TranscriptResponse, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	part, err := writer.CreateFormFile("file", info.Name())
+	part, err := writer.CreateFormFile("file", filename)
 	if err != nil {
 		return TranscriptResponse{}, err
 	}
