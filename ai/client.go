@@ -54,7 +54,7 @@ func NewOpenAI(apiKey string) *OpenAI {
 
 // Chat digunakan untuk melakukan chat
 func (c *OpenAI) Chat(message string) (ChatResponse, error) {
-	url, err := url.JoinPath(c.BaseURL, "/engines/chat/completions")
+	url, err := url.JoinPath(c.BaseURL, "/chat/completions")
 	if err != nil {
 		return ChatResponse{}, err
 	}
