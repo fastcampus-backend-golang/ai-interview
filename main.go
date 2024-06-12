@@ -9,9 +9,8 @@ import (
 )
 
 var (
-	port      = os.Getenv("PORT")
-	accessKey = os.Getenv("ACCESS_KEY")
-	apiKey    = os.Getenv("OPENAI_API_KEY")
+	port   = os.Getenv("PORT")
+	apiKey = os.Getenv("OPENAI_API_KEY")
 )
 
 func main() {
@@ -40,10 +39,6 @@ func main() {
 func validateEnv() error {
 	if port == "" {
 		port = "8080"
-	}
-
-	if accessKey == "" {
-		return errors.New("ACCESS_KEY is required")
 	}
 
 	if apiKey == "" {

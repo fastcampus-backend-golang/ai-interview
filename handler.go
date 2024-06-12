@@ -25,20 +25,9 @@ func NewHandler() *chi.Mux {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Access-Key"},
 	}))
 
-	// gunakan middleware access key pada api-api berikut
-	r.Group(func(r chi.Router) {
-		r.Use(accessKeyMiddleware)
+	r.Get("/initial", initialChat)
 
-		r.Get("/initial", initialChat)
-
-		r.Post("/answer", answerChat)
-	})
-
-	// health check
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{\"healthy\":true}"))
-	})
+	r.Post("/answer", answerChat)
 
 	return r
 }
