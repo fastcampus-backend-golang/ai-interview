@@ -25,14 +25,14 @@ func NewHandler() *chi.Mux {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Access-Key"},
 	}))
 
-	r.Get("/initial", initialChat)
+	r.Get("/chat/start", startChat)
 
-	r.Post("/answer", answerChat)
+	r.Post("/chat/answer", answerChat)
 
 	return r
 }
 
-func initialChat(w http.ResponseWriter, req *http.Request) {
+func startChat(w http.ResponseWriter, req *http.Request) {
 	initialText, err := ai.GetInitialText()
 	if err != nil {
 		log.Printf("failed to get initial text: %v", err)
