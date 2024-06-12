@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/madeindra/interview-ai/handler"
 )
 
 var (
@@ -20,7 +22,7 @@ func main() {
 	}
 
 	// buat handler
-	router := NewHandler()
+	router := handler.NewHandler(apiKey)
 
 	// buat server
 	server := &http.Server{

@@ -1,4 +1,4 @@
-package main
+package model
 
 type ChatResponse struct {
 	Prompt Response `json:"prompt,omitempty"`

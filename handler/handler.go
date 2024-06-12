@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"encoding/base64"
@@ -6,20 +6,21 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
+	"path"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/madeindra/interview-ai/ai"
+	"github.com/madeindra/interview-ai/model"
 )
 
 type handler struct {
 	ai ai.Client
 }
 
-func NewHandler() *chi.Mux {
+func NewHandler(apiKey string) *chi.Mux {
 	h := &handler{
-		ai: ai.NewOpenAI(os.Getenv("OPENAI_API_KEY")),
+		ai: ai.NewOpenAI(apiKey),
 	}
 
 	r := chi.NewRouter()
@@ -31,7 +32,14 @@ func NewHandler() *chi.Mux {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Access-Key"},
 	}))
 
+	// sajikan direktori static ke /public
+	fs := http.FileServer(http.Dir("./static"))
+	r.Handle("/public/*", http.StripPrefix("/public", fs))
+
+	// rute untuk homepage
 	r.Get("/", h.Homepage)
+
+	// rute untuk chat
 	r.Get("/chat/start", h.StartChat)
 	r.Post("/chat/answer", h.AnswerChat)
 
@@ -39,6 +47,8 @@ func NewHandler() *chi.Mux {
 }
 
 func (h *handler) Homepage(w http.ResponseWriter, req *http.Request) {
+	pagePath := path.Join("page", "index.html")
+	http.ServeFile(w, req, pagePath)
 }
 
 func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
@@ -56,8 +66,8 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	response := ChatResponse{
-		Answer: Response{
+	response := model.ChatResponse{
+		Answer: model.Response{
 			Text:  initialText,
 			Audio: initialAudio,
 		},
@@ -131,11 +141,11 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 	speechBase64 := base64.StdEncoding.EncodeToString(speechByte)
 
 	// send response
-	response := ChatResponse{
-		Prompt: Response{
+	response := model.ChatResponse{
+		Prompt: model.Response{
 			Text: transcript.Text,
 		},
-		Answer: Response{
+		Answer: model.Response{
 			Text:  chatCompletion.Choices[0].Message.Content,
 			Audio: speechBase64,
 		},
