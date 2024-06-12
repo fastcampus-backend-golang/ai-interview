@@ -13,9 +13,15 @@ import (
 	"github.com/madeindra/interview-ai/ai"
 )
 
-var client = ai.NewOpenAI(os.Getenv("OPENAI_API_KEY"))
+type handler struct {
+	ai ai.Client
+}
 
 func NewHandler() *chi.Mux {
+	h := &handler{
+		ai: ai.NewOpenAI(os.Getenv("OPENAI_API_KEY")),
+	}
+
 	r := chi.NewRouter()
 
 	// gunakan middleware CORS
@@ -25,14 +31,17 @@ func NewHandler() *chi.Mux {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Access-Key"},
 	}))
 
-	r.Get("/chat/start", startChat)
-
-	r.Post("/chat/answer", answerChat)
+	r.Get("/", h.Homepage)
+	r.Get("/chat/start", h.StartChat)
+	r.Post("/chat/answer", h.AnswerChat)
 
 	return r
 }
 
-func startChat(w http.ResponseWriter, req *http.Request) {
+func (h *handler) Homepage(w http.ResponseWriter, req *http.Request) {
+}
+
+func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 	initialText, err := ai.GetInitialText()
 	if err != nil {
 		log.Printf("failed to get initial text: %v", err)
@@ -67,7 +76,7 @@ func startChat(w http.ResponseWriter, req *http.Request) {
 	w.Write(resp)
 }
 
-func answerChat(w http.ResponseWriter, req *http.Request) {
+func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 	// read audio as multipart
 	file, fileHeader, err := req.FormFile("file")
 	if err != nil {
@@ -83,7 +92,7 @@ func answerChat(w http.ResponseWriter, req *http.Request) {
 	defer file.Close()
 
 	// transcribe the audio
-	transcript, err := client.Transcribe(file, fileHeader.Filename)
+	transcript, err := h.ai.Transcribe(file, fileHeader.Filename)
 	if err != nil {
 		log.Printf("failed to transcribe audio: %v", err)
 		http.Error(w, "failed to transcribe audio", http.StatusInternalServerError)
@@ -91,7 +100,7 @@ func answerChat(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// get chat completion
-	chatCompletion, err := client.Chat(transcript.Text)
+	chatCompletion, err := h.ai.Chat(transcript.Text)
 	if err != nil {
 		log.Printf("failed to get chat completion: %v", err)
 		http.Error(w, "failed to get chat completion", http.StatusInternalServerError)
@@ -105,7 +114,7 @@ func answerChat(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// create speech from the chat completion
-	speech, err := client.TextToSpeech(chatCompletion.Choices[0].Message.Content)
+	speech, err := h.ai.TextToSpeech(chatCompletion.Choices[0].Message.Content)
 	if err != nil {
 		log.Printf("failed to create speech: %v", err)
 		http.Error(w, "failed to create speech", http.StatusInternalServerError)
