@@ -1,4 +1,5 @@
 const chatWindow = document.getElementById('chat-window');
+const startBtn = document.getElementById('start-btn');
 const recordBtn = document.getElementById('record-btn');
 let mediaRecorder;
 let audioChunks = [];
@@ -53,18 +54,8 @@ function handleAudioBlob(audioBlob) {
         appendMessage(replyMessage, 'reply')
 
         const replyAudio = data.answer.audio;
+        decodeBase64Audio(replyAudio);
         
-        const audioData = atob(replyAudio);
-        const audioBuffer = new ArrayBuffer(audioData.length);
-        const audioView = new Uint8Array(audioBuffer);
-        for (let i = 0; i < audioData.length; i++) {
-            audioView[i] = audioData.charCodeAt(i);
-        }
-        const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-
-        const audio = new Audio(audioUrl);
-        audio.play();
     })
     .catch(error => {
         console.error('Error:', error);
@@ -78,3 +69,35 @@ function appendMessage(message, type) {
     chatWindow.appendChild(messageDiv);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 }
+
+function decodeBase64Audio(encodedAudio) {
+    const audioData = atob(encodedAudio);
+    const audioBuffer = new ArrayBuffer(audioData.length);
+    const audioView = new Uint8Array(audioBuffer);
+    for (let i = 0; i < audioData.length; i++) {
+        audioView[i] = audioData.charCodeAt(i);
+    }
+    const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+
+    const audio = new Audio(audioUrl);
+    audio.play();
+}
+
+startBtn.addEventListener('click', () => {
+    fetch('http://localhost:8080/chat/start')
+        .then(response => response.json())
+        .then(data => {
+            const systemMessage = data.answer.text;
+            appendMessage(systemMessage, 'reply');
+
+            const replyAudio = data.answer.audio;
+            decodeBase64Audio(replyAudio);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+
+    startBtn.style.display = 'none';
+    recordBtn.style.display = 'block';
+});
