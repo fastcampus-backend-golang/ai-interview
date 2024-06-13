@@ -1,8 +1,27 @@
 const chatWindow = document.getElementById('chat-window');
 const startBtn = document.getElementById('start-btn');
 const recordBtn = document.getElementById('record-btn');
+
 let mediaRecorder;
 let audioChunks = [];
+
+startBtn.addEventListener('click', () => {
+    fetch('http://localhost:8080/chat/start')
+        .then(response => response.json())
+        .then(data => {
+            const systemMessage = data.answer.text;
+            appendMessage(systemMessage, 'reply');
+
+            const replyAudio = data.answer.audio;
+            decodeBase64Audio(replyAudio);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+
+    startBtn.style.display = 'none';
+    recordBtn.style.display = 'block';
+});
 
 recordBtn.addEventListener('click', () => {
     if (recordBtn.textContent === 'Record Audio') {
@@ -17,7 +36,7 @@ function startRecording() {
         .then(stream => {
             mediaRecorder = new MediaRecorder(stream);
             mediaRecorder.start();
-            recordBtn.textContent = 'Stop Recording';
+            enableStopButton();
 
             mediaRecorder.ondataavailable = event => {
                 audioChunks.push(event.data);
@@ -33,7 +52,7 @@ function startRecording() {
 
 function stopRecording() {
     mediaRecorder.stop();
-    recordBtn.textContent = 'Record Audio';
+    disableRecordButton();
 }
 
 function handleAudioBlob(audioBlob) {
@@ -56,6 +75,7 @@ function handleAudioBlob(audioBlob) {
         const replyAudio = data.answer.audio;
         decodeBase64Audio(replyAudio);
         
+        enableRecordButton();
     })
     .catch(error => {
         console.error('Error:', error);
@@ -84,20 +104,16 @@ function decodeBase64Audio(encodedAudio) {
     audio.play();
 }
 
-startBtn.addEventListener('click', () => {
-    fetch('http://localhost:8080/chat/start')
-        .then(response => response.json())
-        .then(data => {
-            const systemMessage = data.answer.text;
-            appendMessage(systemMessage, 'reply');
+function disableRecordButton() {
+    recordBtn.disabled = true;
+    recordBtn.textContent = 'Processing';
+}
 
-            const replyAudio = data.answer.audio;
-            decodeBase64Audio(replyAudio);
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
+function enableRecordButton() {
+    recordBtn.disabled = false;
+    recordBtn.textContent = 'Record Audio';
+}
 
-    startBtn.style.display = 'none';
-    recordBtn.style.display = 'block';
-});
+function enableStopButton() {
+    recordBtn.textContent = 'Stop Recording';
+}
