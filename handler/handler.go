@@ -109,6 +109,12 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if transcript.Text == "" {
+		log.Println("no transcript")
+		http.Error(w, "no transcript", http.StatusInternalServerError)
+		return
+	}
+
 	// get chat completion
 	chatCompletion, err := h.ai.Chat(transcript.Text)
 	if err != nil {
