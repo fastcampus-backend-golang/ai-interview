@@ -11,16 +11,19 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/madeindra/interview-ai/ai"
+	"github.com/madeindra/interview-ai/db"
 	"github.com/madeindra/interview-ai/model"
 )
 
 type handler struct {
 	ai ai.Client
+	db db.Client
 }
 
-func NewHandler(apiKey string) *chi.Mux {
+func NewHandler(apiKey string, dbURI string) *chi.Mux {
 	h := &handler{
 		ai: ai.NewOpenAI(apiKey),
+		db: db.NewMongo(dbURI),
 	}
 
 	r := chi.NewRouter()
@@ -46,6 +49,26 @@ func NewHandler(apiKey string) *chi.Mux {
 	return r
 }
 
+func sendResponse(w http.ResponseWriter, data any, message string, status int) {
+	resp, err := json.Marshal(model.Response{
+		Message: message,
+		Data:    data,
+	})
+	if err != nil {
+		log.Printf("failed to marshal response: %v", err)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"message": "an error occured while processing the request"}`))
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(resp)
+}
+
 func (h *handler) Homepage(w http.ResponseWriter, req *http.Request) {
 	pagePath := path.Join("page", "index.html")
 	http.ServeFile(w, req, pagePath)
@@ -55,48 +78,63 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 	initialText, err := ai.GetInitialText()
 	if err != nil {
 		log.Printf("failed to get initial text: %v", err)
-		http.Error(w, "failed to get initial text", http.StatusInternalServerError)
+		sendResponse(w, nil, "failed to get initial text", http.StatusInternalServerError)
+
 		return
 	}
+
+	entry := model.ChatEntry{
+		ID:     "", // TODO: generate new
+		Secret: "", // TODO: generate new
+		History: []ai.ChatMessage{
+			{
+				Role:    ai.ROLE_SYSTEM,
+				Content: initialText,
+			},
+		},
+	}
+
+	// TODO: store to database
 
 	initialAudio, err := ai.GetInitialAudio()
 	if err != nil {
 		log.Printf("failed to get initial audio: %v", err)
-		http.Error(w, "failed to get initial audio", http.StatusInternalServerError)
+		sendResponse(w, nil, "failed to get initial audio", http.StatusInternalServerError)
+
 		return
 	}
 
-	response := model.ChatResponse{
-		Answer: model.Response{
-			Text:  initialText,
+	initialChat := model.InitialChatData{
+		ID:     entry.ID,
+		Secret: entry.Secret,
+		Chat: model.Chat{
+			Text:  entry.History[0].Content,
 			Audio: initialAudio,
 		},
 	}
 
-	resp, err := json.Marshal(response)
-	if err != nil {
-		log.Printf("failed to marshal response: %v", err)
-		http.Error(w, "failed to marshal response", http.StatusInternalServerError)
-		return
-	}
-
-	// write the response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(resp)
+	sendResponse(w, initialChat, "a new chat created", http.StatusOK)
 }
 
 func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
+	// TODO: validate id and secret
+
+	// TODO: fetch data from database
+
+	// TODO: match secret
+
 	// read audio as multipart
 	file, fileHeader, err := req.FormFile("file")
 	if err != nil {
 		log.Printf("failed to read file: %v", err)
-		http.Error(w, "failed to read file", http.StatusInternalServerError)
+		sendResponse(w, nil, "failed to read file", http.StatusInternalServerError)
+
 		return
 	}
 	if fileHeader == nil {
-		log.Println("no file uploaded")
-		http.Error(w, "no file uploaded", http.StatusBadRequest)
+		log.Println("required file is missing")
+		sendResponse(w, nil, "required file is missing", http.StatusBadRequest)
+
 		return
 	}
 	defer file.Close()
@@ -105,27 +143,34 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 	transcript, err := h.ai.Transcribe(file, fileHeader.Filename)
 	if err != nil {
 		log.Printf("failed to transcribe audio: %v", err)
-		http.Error(w, "failed to transcribe audio", http.StatusInternalServerError)
+		sendResponse(w, nil, "failed to transcribe audio", http.StatusInternalServerError)
+
 		return
 	}
 
 	if transcript.Text == "" {
-		log.Println("no transcript")
-		http.Error(w, "no transcript", http.StatusInternalServerError)
+		log.Println("cannot complete audio transcription: no transcript")
+		sendResponse(w, nil, "cannot complete audio transcription", http.StatusInternalServerError)
+
 		return
 	}
 
+	// TODO: append the transcript to the chat history
+	chatHistory := []ai.ChatMessage{}
+
 	// get chat completion
-	chatCompletion, err := h.ai.Chat(transcript.Text)
+	chatCompletion, err := h.ai.Chat(chatHistory)
 	if err != nil {
 		log.Printf("failed to get chat completion: %v", err)
-		http.Error(w, "failed to get chat completion", http.StatusInternalServerError)
+		sendResponse(w, nil, "failed to get chat completion", http.StatusInternalServerError)
+
 		return
 	}
 
 	if len(chatCompletion.Choices) == 0 {
-		log.Println("no chat completion")
-		http.Error(w, "no chat completion", http.StatusInternalServerError)
+		log.Println("cannot complete chat completion: no chat completion")
+		sendResponse(w, nil, "cannot complete chat completion", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -133,7 +178,8 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 	speech, err := h.ai.TextToSpeech(chatCompletion.Choices[0].Message.Content)
 	if err != nil {
 		log.Printf("failed to create speech: %v", err)
-		http.Error(w, "failed to create speech", http.StatusInternalServerError)
+		sendResponse(w, nil, "failed to create speech", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -141,31 +187,24 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 	speechByte, err := io.ReadAll(speech)
 	if err != nil {
 		log.Printf("failed to read speech: %v", err)
-		http.Error(w, "failed to read speech", http.StatusInternalServerError)
+		sendResponse(w, nil, "failed to read speech", http.StatusInternalServerError)
+
 		return
 	}
 	speechBase64 := base64.StdEncoding.EncodeToString(speechByte)
 
+	// TODO: update chat history in database
+
 	// send response
-	response := model.ChatResponse{
-		Prompt: model.Response{
+	response := model.ChatData{
+		Prompt: model.Chat{
 			Text: transcript.Text,
 		},
-		Answer: model.Response{
+		Answer: model.Chat{
 			Text:  chatCompletion.Choices[0].Message.Content,
 			Audio: speechBase64,
 		},
 	}
 
-	resp, err := json.Marshal(response)
-	if err != nil {
-		log.Printf("failed to marshal response: %v", err)
-		http.Error(w, "failed to marshal response", http.StatusInternalServerError)
-		return
-	}
-
-	// write the response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(resp)
+	sendResponse(w, response, "success", http.StatusOK)
 }

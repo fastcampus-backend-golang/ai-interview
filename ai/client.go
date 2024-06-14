@@ -12,7 +12,7 @@ import (
 )
 
 type Client interface {
-	Chat(string) (ChatResponse, error)
+	Chat([]ChatMessage) (ChatResponse, error)
 	TextToSpeech(string) (io.ReadCloser, error)
 	Transcribe(io.ReadCloser, string) (TranscriptResponse, error)
 }
@@ -52,24 +52,15 @@ func NewOpenAI(apiKey string) *OpenAI {
 }
 
 // Chat digunakan untuk melakukan chat
-func (c *OpenAI) Chat(message string) (ChatResponse, error) {
+func (c *OpenAI) Chat(messages []ChatMessage) (ChatResponse, error) {
 	url, err := url.JoinPath(c.BaseURL, "/chat/completions")
 	if err != nil {
 		return ChatResponse{}, err
 	}
 
 	chatReq := ChatRequest{
-		Model: c.ChatModel,
-		Messages: []ChatMessage{
-			{
-				Role:    ROLE_SYSTEM,
-				Content: defaultSystemContent,
-			},
-			{
-				Role:    ROLE_USER,
-				Content: message,
-			},
-		},
+		Model:    c.ChatModel,
+		Messages: messages,
 	}
 
 	body, err := json.Marshal(chatReq)

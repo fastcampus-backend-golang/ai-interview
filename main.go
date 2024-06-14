@@ -13,6 +13,7 @@ import (
 var (
 	port   = os.Getenv("PORT")
 	apiKey = os.Getenv("OPENAI_API_KEY")
+	dbURI  = os.Getenv("DB_URI")
 )
 
 func main() {
@@ -22,7 +23,7 @@ func main() {
 	}
 
 	// buat handler
-	router := handler.NewHandler(apiKey)
+	router := handler.NewHandler(apiKey, dbURI)
 
 	// buat server
 	server := &http.Server{
@@ -41,6 +42,10 @@ func main() {
 func validateEnv() error {
 	if port == "" {
 		port = "8080"
+	}
+
+	if dbURI == "" {
+		return errors.New("DB_URI is required")
 	}
 
 	if apiKey == "" {
