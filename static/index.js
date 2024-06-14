@@ -5,14 +5,20 @@ const recordBtn = document.getElementById('record-btn');
 let mediaRecorder;
 let audioChunks = [];
 
+let userId = "";
+let userSecret = ""
+
 startBtn.addEventListener('click', () => {
     fetch('http://localhost:8080/chat/start')
         .then(response => response.json())
         .then(data => {
-            const systemMessage = data.answer.text;
+            userId = data.data.id;
+            userSecret = data.data.secret;
+
+            const systemMessage = data.data.text;
             appendMessage(systemMessage, 'reply');
 
-            const replyAudio = data.answer.audio;
+            const replyAudio = data.data.audio;
             decodeBase64Audio(replyAudio);
         })
         .catch(error => {
@@ -59,20 +65,26 @@ function handleAudioBlob(audioBlob) {
     const formData = new FormData();
     formData.append('file', audioBlob, 'audio.wav');
 
+    // base64 encode id and secret
+    const auth = btoa(`${userId}:${userSecret}`);
+
     // Send audio to speech-to-text API
     fetch('http://localhost:8080/chat/answer', {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+            'Authorization': `Basic ${auth}`
+        }
     })
     .then(response => response.json())
     .then(data => {
-        const userMessage = data.prompt.text;
+        const userMessage = data.data.prompt.text;
         appendMessage(userMessage, 'user');
         
-        const replyMessage = data.answer.text;
+        const replyMessage = data.data.answer.text;
         appendMessage(replyMessage, 'reply')
 
-        const replyAudio = data.answer.audio;
+        const replyAudio = data.data.answer.audio;
         decodeBase64Audio(replyAudio);
         
         enableRecordButton();
