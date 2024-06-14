@@ -11,19 +11,19 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/madeindra/interview-ai/ai"
-	"github.com/madeindra/interview-ai/db"
+	"github.com/madeindra/interview-ai/data"
 	"github.com/madeindra/interview-ai/model"
 )
 
 type handler struct {
 	ai ai.Client
-	db db.Client
+	db data.Client
 }
 
 func NewHandler(apiKey string, dbURI string) *chi.Mux {
 	h := &handler{
 		ai: ai.NewOpenAI(apiKey),
-		db: db.NewMongo(dbURI),
+		db: data.NewMongo(dbURI),
 	}
 
 	r := chi.NewRouter()
@@ -83,7 +83,7 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	entry := model.ChatEntry{
+	entry := data.ChatEntry{
 		ID:     "", // TODO: generate new
 		Secret: "", // TODO: generate new
 		History: []ai.ChatMessage{
@@ -104,10 +104,10 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	initialChat := model.InitialChatData{
+	initialChat := data.InitialChatData{
 		ID:     entry.ID,
 		Secret: entry.Secret,
-		Chat: model.Chat{
+		Chat: data.Chat{
 			Text:  entry.History[0].Content,
 			Audio: initialAudio,
 		},
@@ -196,11 +196,11 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 	// TODO: update chat history in database
 
 	// send response
-	response := model.ChatData{
-		Prompt: model.Chat{
+	response := data.ChatData{
+		Prompt: data.Chat{
 			Text: transcript.Text,
 		},
-		Answer: model.Chat{
+		Answer: data.Chat{
 			Text:  chatCompletion.Choices[0].Message.Content,
 			Audio: speechBase64,
 		},
