@@ -23,6 +23,7 @@ startBtn.addEventListener('click', () => {
         })
         .catch(error => {
             console.error('Error:', error);
+            window.alert('Error starting chat, please try again.');
         });
 
     startBtn.style.display = 'none';
@@ -91,6 +92,9 @@ function handleAudioBlob(audioBlob) {
     })
     .catch(error => {
         console.error('Error:', error);
+        window.alert('Error processing answer, please try again.');
+
+        enableRecordButton();
     });
 }
 
