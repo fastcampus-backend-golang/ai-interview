@@ -3,7 +3,7 @@ package data
 import "github.com/madeindra/interview-ai/ai"
 
 type ChatEntry struct {
-	ID      string
+	ID      string `bson:"_id"`
 	Secret  string
 	History []ai.ChatMessage
 }

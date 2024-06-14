@@ -4,7 +4,8 @@ import (
 	"context"
 	"log"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -46,7 +47,7 @@ func NewMongo(uri string) *Mongo {
 
 func (m *Mongo) InsertChat(data ChatEntry) (string, error) {
 	if data.ID == "" {
-		data.ID = primitive.NewObjectID().String()
+		data.ID = uuid.New().String()
 	}
 
 	_, err := m.db.Collection(collection).InsertOne(context.Background(), data)
@@ -60,7 +61,7 @@ func (m *Mongo) InsertChat(data ChatEntry) (string, error) {
 func (m *Mongo) GetChat(id string) (ChatEntry, error) {
 	var data ChatEntry
 
-	err := m.db.Collection(collection).FindOne(context.Background(), ChatEntry{ID: id}).Decode(&data)
+	err := m.db.Collection(collection).FindOne(context.Background(), bson.M{"_id": id}).Decode(&data)
 	if err != nil {
 		return ChatEntry{}, err
 	}
@@ -69,7 +70,7 @@ func (m *Mongo) GetChat(id string) (ChatEntry, error) {
 }
 
 func (m *Mongo) UpdateChat(id string, data ChatEntry) error {
-	_, err := m.db.Collection(collection).UpdateOne(context.Background(), ChatEntry{ID: id}, data)
+	_, err := m.db.Collection(collection).UpdateOne(context.Background(), bson.M{"_id": id}, bson.M{"$set": data})
 	if err != nil {
 		return err
 	}
@@ -78,7 +79,7 @@ func (m *Mongo) UpdateChat(id string, data ChatEntry) error {
 }
 
 func (m *Mongo) DeleteChat(id string) error {
-	_, err := m.db.Collection(collection).DeleteOne(context.Background(), ChatEntry{ID: id})
+	_, err := m.db.Collection(collection).DeleteOne(context.Background(), bson.M{"_id": id})
 	if err != nil {
 		return err
 	}
