@@ -199,8 +199,10 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	speechInput := sanitizeString(chatCompletion.Choices[0].Message.Content)
+
 	// buat audio dari teks AI
-	speech, err := h.ai.TextToSpeech(chatCompletion.Choices[0].Message.Content)
+	speech, err := h.ai.TextToSpeech(speechInput)
 	if err != nil {
 		log.Printf("failed to create speech: %v", err)
 		sendResponse(w, nil, "failed to create speech", http.StatusInternalServerError)

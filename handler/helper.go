@@ -5,6 +5,8 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/madeindra/interview-ai/model"
 	"golang.org/x/crypto/bcrypt"
@@ -60,4 +62,27 @@ func createHash(plain string) (string, error) {
 func compareHash(plain, hash string) error {
 	// bandingkan hash dengan password
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain))
+}
+
+func sanitizeString(text string) string {
+	// hapus tebal
+	reStrong := regexp.MustCompile(`\*\*([^*]+)\*\*`)
+	text = reStrong.ReplaceAllString(text, "$1")
+
+	// hapus miring
+	reItalic := regexp.MustCompile(`\*([^*]+)\*`)
+	text = reItalic.ReplaceAllString(text, "$1")
+
+	// Remove links
+	reLink := regexp.MustCompile(`\[(.*?)\]\(.*?\)`)
+	text = reLink.ReplaceAllString(text, "$1")
+
+	// hapus new line
+	reBullet := regexp.MustCompile(`\n- `)
+	text = reBullet.ReplaceAllString(text, ", ")
+
+	// ganti new line dengan spasi
+	text = strings.Replace(text, "\n", " ", -1)
+
+	return text
 }
