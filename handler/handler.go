@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -12,7 +11,6 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/madeindra/interview-ai/ai"
 	"github.com/madeindra/interview-ai/data"
-	"github.com/madeindra/interview-ai/model"
 )
 
 type handler struct {
@@ -32,7 +30,7 @@ func NewHandler(apiKey string, dbURI string) *chi.Mux {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Access-Key"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
 	// sajikan direktori static ke /public
@@ -44,37 +42,23 @@ func NewHandler(apiKey string, dbURI string) *chi.Mux {
 
 	// rute untuk chat
 	r.Get("/chat/start", h.StartChat)
-	r.Post("/chat/answer", h.AnswerChat)
+
+	r.Group(func(r chi.Router) {
+		r.Use(authMiddleware)
+		r.Post("/chat/answer", h.AnswerChat)
+	})
 
 	return r
 }
 
-func sendResponse(w http.ResponseWriter, data any, message string, status int) {
-	resp, err := json.Marshal(model.Response{
-		Message: message,
-		Data:    data,
-	})
-	if err != nil {
-		log.Printf("failed to marshal response: %v", err)
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "an error occured while processing the request"}`))
-
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	w.Write(resp)
-}
-
 func (h *handler) Homepage(w http.ResponseWriter, req *http.Request) {
+	// sajikan halaman index.html
 	pagePath := path.Join("page", "index.html")
 	http.ServeFile(w, req, pagePath)
 }
 
 func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
+	// ambil teks awal dari AI
 	initialText, err := ai.GetInitialText()
 	if err != nil {
 		log.Printf("failed to get initial text: %v", err)
@@ -83,9 +67,19 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// buat kata sandi
+	plainSecret := generateRandom()
+	hashed, err := createHash(plainSecret)
+	if err != nil {
+		log.Printf("failed to create hash: %v", err)
+		sendResponse(w, nil, "failed to create hash", http.StatusInternalServerError)
+
+		return
+	}
+
+	// buat chat baru
 	entry := data.ChatEntry{
-		ID:     "", // TODO: generate new
-		Secret: "", // TODO: generate new
+		Secret: hashed,
 		History: []ai.ChatMessage{
 			{
 				Role:    ai.ROLE_SYSTEM,
@@ -94,8 +88,15 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 		},
 	}
 
-	// TODO: store to database
+	newID, err := h.db.InsertChat(entry)
+	if err != nil {
+		log.Printf("failed to create new chat: %v", err)
+		sendResponse(w, nil, "failed to create new chat", http.StatusInternalServerError)
 
+		return
+	}
+
+	// ambil audio awal dari AI
 	initialAudio, err := ai.GetInitialAudio()
 	if err != nil {
 		log.Printf("failed to get initial audio: %v", err)
@@ -104,9 +105,10 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// kirim respons awal
 	initialChat := data.InitialChatData{
-		ID:     entry.ID,
-		Secret: entry.Secret,
+		ID:     newID,
+		Secret: plainSecret,
 		Chat: data.Chat{
 			Text:  entry.History[0].Content,
 			Audio: initialAudio,
@@ -117,13 +119,36 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
-	// TODO: validate id and secret
+	// ambil user ID dan kata sandi dari konteks (diatur oleh middleware)
+	userID := req.Context().Value(contextKeyUserID).(string)
+	userSecret := req.Context().Value(contextKeyUserSecret).(string)
 
-	// TODO: fetch data from database
+	// pastikan user ID dan kata sandi tidak kosong
+	if userID == "" || userSecret == "" {
+		log.Println("user ID or secret is missing")
+		sendResponse(w, nil, "missing required authentication", http.StatusUnauthorized)
 
-	// TODO: match secret
+		return
+	}
 
-	// read audio as multipart
+	// ambil chat entry berdasarkan user ID
+	entry, err := h.db.GetChat(userID)
+	if err != nil {
+		log.Printf("failed to get chat: %v", err)
+		sendResponse(w, nil, "failed to get chat", http.StatusInternalServerError)
+
+		return
+	}
+
+	// bandingkan kata sandi
+	if err := compareHash(userSecret, entry.Secret); err != nil {
+		log.Println("invalid user secret")
+		sendResponse(w, nil, "invalid user secret", http.StatusUnauthorized)
+
+		return
+	}
+
+	// baca file audio dari form
 	file, fileHeader, err := req.FormFile("file")
 	if err != nil {
 		log.Printf("failed to read file: %v", err)
@@ -139,7 +164,7 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 	}
 	defer file.Close()
 
-	// transcribe the audio
+	// ubah audio menjadi teks
 	transcript, err := h.ai.Transcribe(file, fileHeader.Filename)
 	if err != nil {
 		log.Printf("failed to transcribe audio: %v", err)
@@ -148,6 +173,7 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// pastikan teks tidak kosong
 	if transcript.Text == "" {
 		log.Println("cannot complete audio transcription: no transcript")
 		sendResponse(w, nil, "cannot complete audio transcription", http.StatusInternalServerError)
@@ -155,10 +181,13 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// TODO: append the transcript to the chat history
-	chatHistory := []ai.ChatMessage{}
+	// gabungkan teks ke chat history
+	chatHistory := append(entry.History, ai.ChatMessage{
+		Role:    ai.ROLE_USER,
+		Content: transcript.Text,
+	})
 
-	// get chat completion
+	// kirim history ke AI
 	chatCompletion, err := h.ai.Chat(chatHistory)
 	if err != nil {
 		log.Printf("failed to get chat completion: %v", err)
@@ -167,6 +196,7 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// pastikan chat completion tidak kosong
 	if len(chatCompletion.Choices) == 0 {
 		log.Println("cannot complete chat completion: no chat completion")
 		sendResponse(w, nil, "cannot complete chat completion", http.StatusInternalServerError)
@@ -174,7 +204,7 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// create speech from the chat completion
+	// buat audio dari teks AI
 	speech, err := h.ai.TextToSpeech(chatCompletion.Choices[0].Message.Content)
 	if err != nil {
 		log.Printf("failed to create speech: %v", err)
@@ -183,7 +213,7 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// encode the speech to base64
+	// ubah audio menjadi base64
 	speechByte, err := io.ReadAll(speech)
 	if err != nil {
 		log.Printf("failed to read speech: %v", err)
@@ -193,9 +223,22 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 	}
 	speechBase64 := base64.StdEncoding.EncodeToString(speechByte)
 
-	// TODO: update chat history in database
+	// gabungkan teks AI ke chat history
+	chatHistory = append(chatHistory, ai.ChatMessage{
+		Role:    ai.ROLE_SYSTEM,
+		Content: chatCompletion.Choices[0].Message.Content,
+	})
 
-	// send response
+	// update chat entry
+	entry.History = chatHistory
+	if err := h.db.UpdateChat(userID, entry); err != nil {
+		log.Printf("failed to update chat: %v", err)
+		sendResponse(w, nil, "failed to update chat", http.StatusInternalServerError)
+
+		return
+	}
+
+	// kirim respons
 	response := data.ChatData{
 		Prompt: data.Chat{
 			Text: transcript.Text,
