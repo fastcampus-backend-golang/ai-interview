@@ -59,7 +59,7 @@ func (h *handler) Homepage(w http.ResponseWriter, req *http.Request) {
 
 func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 	// ambil teks awal dari AI
-	initialText, err := ai.GetInitialText()
+	asset, err := ai.GetChatAsset()
 	if err != nil {
 		log.Printf("failed to get initial text: %v", err)
 		sendResponse(w, nil, "failed to get initial text", http.StatusInternalServerError)
@@ -83,7 +83,11 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 		History: []ai.ChatMessage{
 			{
 				Role:    ai.ROLE_SYSTEM,
-				Content: initialText,
+				Content: asset.SystemPrompt,
+			},
+			{
+				Role:    ai.ROLE_ASSISTANT,
+				Content: asset.ChatText,
 			},
 		},
 	}
@@ -96,22 +100,13 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// ambil audio awal dari AI
-	initialAudio, err := ai.GetInitialAudio()
-	if err != nil {
-		log.Printf("failed to get initial audio: %v", err)
-		sendResponse(w, nil, "failed to get initial audio", http.StatusInternalServerError)
-
-		return
-	}
-
 	// kirim respons awal
 	initialChat := data.InitialChatData{
 		ID:     newID,
 		Secret: plainSecret,
 		Chat: data.Chat{
 			Text:  entry.History[0].Content,
-			Audio: initialAudio,
+			Audio: asset.ChatAudio,
 		},
 	}
 
@@ -225,7 +220,7 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 
 	// gabungkan teks AI ke chat history
 	chatHistory = append(chatHistory, ai.ChatMessage{
-		Role:    ai.ROLE_SYSTEM,
+		Role:    ai.ROLE_ASSISTANT,
 		Content: chatCompletion.Choices[0].Message.Content,
 	})
 

@@ -17,8 +17,9 @@ type ChatMessage struct {
 type Role string
 
 const (
-	ROLE_SYSTEM Role = "system"
-	ROLE_USER   Role = "user"
+	ROLE_SYSTEM    Role = "system"
+	ROLE_ASSISTANT Role = "assistant"
+	ROLE_USER      Role = "user"
 )
 
 type Choice struct {
