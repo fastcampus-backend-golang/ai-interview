@@ -105,7 +105,7 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 		ID:     newID,
 		Secret: plainSecret,
 		Chat: data.Chat{
-			Text:  entry.History[0].Content,
+			Text:  asset.ChatText,
 			Audio: asset.ChatAudio,
 		},
 	}
