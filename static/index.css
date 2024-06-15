@@ -1,21 +1,35 @@
+body {
+    background-color: #212121;
+    color: white;
+    padding-top: 20px;
+}
+
 #chat-window {
-    border: 1px solid #ccc;
-    width: 400px;
-    height: 300px;
-    overflow-y: scroll;
+    background: #2F2F2F;
     padding: 10px;
+    max-width: 75vw;
+    height: 85vh;
+    margin: auto;
+    overflow-y: auto;
 }
-#controls {
-    margin-top: 10px;
-}
+
 .message {
-    margin: 5px 0;
+    padding: 10px 15px;
+    margin: 10px 0;
+    border-radius: 10px;
 }
+
 .user {
+    background-color: #4a6785;
     text-align: right;
-    color: blue;
 }
-.reply {
+
+.assistant {
     text-align: left;
-    color: green;
+}
+
+.center-button {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
 }

@@ -52,7 +52,7 @@ async function initChat() {
 
     // tampilkan pesan awal
     const initialMessage = data.data.text;
-    appendMessage(initialMessage, 'reply');
+    appendMessage(initialMessage, 'assistant');
 
     // putar audio awal
     const initialAudio = data.data.audio;
@@ -122,7 +122,7 @@ async function sendAudio(audioBlob) {
 
     // tampikan pesan jawaban
     const replyMessage = data.data.answer.text;
-    appendMessage(replyMessage, 'reply')
+    appendMessage(replyMessage, 'assistant')
 
     // putar audio jawaban
     const replyAudio = data.data.answer.audio;
@@ -192,7 +192,7 @@ function buttonRecording() {
   recordButton.state.recording = true;
 
   // atur text button
-  recordButton.textContent = 'Stop Recording';
+  recordButton.innerHTML = '<i class="bi bi-stop-fill"></i> Save Answer';
 }
 
 function buttonIdle() {
@@ -204,13 +204,11 @@ function buttonIdle() {
   recordButton.state.recording = false;
 
   // atur text button
-  recordButton.textContent = 'Start Recording';
+  recordButton.innerHTML = '<i class="bi bi-record-circle"></i> Record Answer';
 }
 
 function buttonProcessing() {
-  // atur button agar tidak bisa diklik
+  // atur button agar tidak bisa diklik & beri loading spinner
   recordButton.disabled = true;
-
-  // atur text button
-  recordButton.textContent = 'Processing';
+  recordButton.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span role="status"> Processing...</span>'
 }
