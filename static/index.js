@@ -40,58 +40,104 @@ recordButton.onclick = () => {
   stopRecording();
 }
 
-function initChat() {
-  fetch(`${baseUrl}/chat/start`)
-    .then(response => response.json())
-    .then(data => {
-      // simpan userId dan userSecret
-      const userId = data.data.id;
-      const userSecret = data.data.secret;
-      setAuthorization(userId, userSecret);
+async function initChat() {
+  try {
+    const response = await fetch(`${baseUrl}/chat/start`)
+    const data = await response.json();
 
-      // tampilkan pesan awal
-      const initialMessage = data.data.text;
-      appendMessage(initialMessage, 'reply');
+    // simpan userId dan userSecret
+    const userId = data.data.id;
+    const userSecret = data.data.secret;
+    setAuthorization(userId, userSecret);
 
-      // putar audio awal
-      const initialAudio = data.data.audio;
-      decodeAndPlayAudio(initialAudio);
+    // tampilkan pesan awal
+    const initialMessage = data.data.text;
+    appendMessage(initialMessage, 'reply');
 
-      // atur button sudah diklik
-      buttonIdle();
-    })
-    .catch(error => {
-      console.error("Error:", error);
-      window.alert("Error starting chat, please try again.");
-    });
+    // putar audio awal
+    const initialAudio = data.data.audio;
+    decodeAndPlayAudio(initialAudio);
+
+    // atur button sudah diklik
+    buttonIdle();
+  } catch (error) {
+    console.error("Error:", error);
+    window.alert("Error starting chat, please try again.");
+  }
 }
 
-function startRecording() {
-  // buat rekaman audio
-  navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
-      // ubah button menjadi sedang merekam
-      buttonRecording();
+async function startRecording() {
+  try {
+    // buat rekaman audio
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.start();
+    // ubah button menjadi sedang merekam
+    buttonRecording();
 
-      // tambahkan audio dari mediaRecorder
-      mediaRecorder.ondataavailable = event => {
-        audioChunks.push(event.data);
-      };
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.start();
 
-      // buat jadi blob
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        
-        // reset audio chunks
-        audioChunks = [];
+    // tambahkan audio dari mediaRecorder
+    mediaRecorder.ondataavailable = (event) => {
+      audioChunks.push(event.data);
+    };
 
-        // kirim audio ke server
-        sendAudio(audioBlob);
-      };
-    });
+    // buat jadi blob
+    mediaRecorder.onstop = () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+
+      // reset audio chunks
+      audioChunks = [];
+
+      // kirim audio ke server
+      sendAudio(audioBlob);
+    };
+  } catch (error) {
+    console.error("Error:", error);
+    window.alert("Error starting recording, please try again.");
+
+    // atur button menjadi menunggu merekam
+    buttonIdle();
+  }
+}
+
+async function sendAudio(audioBlob) {
+  // buat form data
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'audio.wav');
+
+  try {
+    // kirim audio ke server
+    const response = await fetch(`${baseUrl}/chat/answer`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Authorization': `Basic ${getAuthorization()}`
+      }
+    })
+    const data = await response.json()
+    // tampilkan pesan hasil transkripsi
+    const userMessage = data.data.prompt.text;
+    appendMessage(userMessage, 'user');
+
+    // tampikan pesan jawaban
+    const replyMessage = data.data.answer.text;
+    appendMessage(replyMessage, 'reply')
+
+    // putar audio jawaban
+    const replyAudio = data.data.answer.audio;
+    decodeAndPlayAudio(replyAudio);
+
+    // atur button menjadi menunggu merekam
+    buttonIdle();
+  } catch (error) {
+    console.error('Error:', error);
+    window.alert('Error processing answer, please try again.');
+
+    // atur button menjadi menunggu merekam
+    buttonIdle();
+  }
+
 }
 
 function stopRecording() {
@@ -100,34 +146,6 @@ function stopRecording() {
 
   // ubah button menjadi sedang diproses
   buttonProcessing();
-}
-
-function buttonRecording() {
-  // atur state button
-  recordButton.state.recording = true;
-
-  // atur text button
-  recordButton.textContent = 'Stop Recording';
-}
-
-function buttonIdle() {
-  // atur button agar bisa diklik
-  recordButton.disabled = false;
-
-  // atur state button
-  recordButton.state.initial = false;
-  recordButton.state.recording = false;
-  
-  // atur text button
-  recordButton.textContent = 'Start Recording';
-}
-
-function buttonProcessing() {
-  // atur button agar tidak bisa diklik
-  recordButton.disabled = true;
-
-  // atur text button
-  recordButton.textContent = 'Processing';
 }
 
 function appendMessage(message, type) {
@@ -143,46 +161,6 @@ function appendMessage(message, type) {
 
   // scroll ke bawah
   chatWindow.scrollTop = chatWindow.scrollHeight;
-}
-
-function sendAudio(audioBlob) {
-  // buat form data
-  const formData = new FormData();
-  formData.append('file', audioBlob, 'audio.wav');
-
-  // kirim audio ke server
-  fetch(`${baseUrl}/chat/answer`, {
-    method: 'POST',
-    body: formData,
-    headers: {
-      'Authorization': `Basic ${getAuthorization()}`
-    }
-  })
-    .then(response => response.json())
-    .then(data => {
-      // tampilkan pesan hasil transkripsi
-      const userMessage = data.data.prompt.text;
-      appendMessage(userMessage, 'user');
-
-      // tampikan pesan jawaban
-      const replyMessage = data.data.answer.text;
-      appendMessage(replyMessage, 'reply')
-
-      // putar audio jawaban
-      const replyAudio = data.data.answer.audio;
-      decodeAndPlayAudio(replyAudio);
-      
-      // atur button menjadi menunggu merekam
-      buttonIdle();
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      window.alert('Error processing answer, please try again.');
-
-      // atur button menjadi menunggu merekam
-      buttonIdle();
-    });
-
 }
 
 function decodeAndPlayAudio(encodedAudio) {
@@ -207,4 +185,32 @@ function decodeAndPlayAudio(encodedAudio) {
   // putar audio
   const audio = new Audio(audioUrl);
   audio.play();
+}
+
+function buttonRecording() {
+  // atur state button
+  recordButton.state.recording = true;
+
+  // atur text button
+  recordButton.textContent = 'Stop Recording';
+}
+
+function buttonIdle() {
+  // atur button agar bisa diklik
+  recordButton.disabled = false;
+
+  // atur state button
+  recordButton.state.initial = false;
+  recordButton.state.recording = false;
+
+  // atur text button
+  recordButton.textContent = 'Start Recording';
+}
+
+function buttonProcessing() {
+  // atur button agar tidak bisa diklik
+  recordButton.disabled = true;
+
+  // atur text button
+  recordButton.textContent = 'Processing';
 }
