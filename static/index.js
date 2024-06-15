@@ -62,7 +62,7 @@ async function initChat() {
     buttonIdle();
   } catch (error) {
     console.error("Error:", error);
-    window.alert("Error starting chat, please try again.");
+    alert("Error starting chat, please try again.");
   }
 }
 
@@ -94,7 +94,7 @@ async function startRecording() {
     };
   } catch (error) {
     console.error("Error:", error);
-    window.alert("Error starting recording, please try again.");
+    alert("Error starting recording, please try again.");
 
     // atur button menjadi menunggu merekam
     buttonIdle();
@@ -132,7 +132,7 @@ async function sendAudio(audioBlob) {
     buttonIdle();
   } catch (error) {
     console.error('Error:', error);
-    window.alert('Error processing answer, please try again.');
+    alert('Error processing answer, please try again.');
 
     // atur button menjadi menunggu merekam
     buttonIdle();
