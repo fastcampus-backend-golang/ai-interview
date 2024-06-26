@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"path"
 
+	"github.com/fastcampus-backend-golang/ai-interview/ai"
+	"github.com/fastcampus-backend-golang/ai-interview/data"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
-	"github.com/madeindra/interview-ai/ai"
-	"github.com/madeindra/interview-ai/data"
 )
 
 type handler struct {

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/madeindra/interview-ai/handler"
+	"github.com/fastcampus-backend-golang/ai-interview/handler"
 )
 
 var (

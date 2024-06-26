@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/madeindra/interview-ai/model"
+	"github.com/fastcampus-backend-golang/ai-interview/model"
 	"golang.org/x/crypto/bcrypt"
 )
 

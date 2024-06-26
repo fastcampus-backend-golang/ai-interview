@@ -1,6 +1,6 @@
 package data
 
-import "github.com/madeindra/interview-ai/ai"
+import "github.com/fastcampus-backend-golang/ai-interview/ai"
 
 type ChatEntry struct {
 	ID      string `bson:"_id"`
