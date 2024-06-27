@@ -95,13 +95,18 @@ func (c *OpenAI) TextToSpeech(input string) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	body := bytes.NewBuffer([]byte(fmt.Sprintf(`{
-		"model": "%s",
-		"voice": "%s",
-		"input": "%s"
-	}`, c.TTSModel, c.TTSVoice, input)))
+	ttsReq := TTSRequest{
+		Model: c.TTSModel,
+		Voice: c.TTSVoice,
+		Input: input,
+	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body)
+	body, err := json.Marshal(ttsReq)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
