@@ -9,6 +9,7 @@ import (
 
 	"github.com/fastcampus-backend-golang/ai-interview/ai"
 	"github.com/fastcampus-backend-golang/ai-interview/data"
+	"github.com/fastcampus-backend-golang/ai-interview/model"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 )
@@ -101,10 +102,10 @@ func (h *handler) StartChat(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// kirim respons awal
-	initialChat := data.InitialChatData{
+	initialChat := model.StartChatResponse{
 		ID:     newID,
 		Secret: plainSecret,
-		Chat: data.Chat{
+		Chat: model.Chat{
 			Text:  asset.ChatText,
 			Audio: asset.ChatAudio,
 		},
@@ -236,11 +237,11 @@ func (h *handler) AnswerChat(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// kirim respons
-	response := data.ChatData{
-		Prompt: data.Chat{
+	response := model.AnswerChatResponse{
+		Prompt: model.Chat{
 			Text: transcript.Text,
 		},
-		Answer: data.Chat{
+		Answer: model.Chat{
 			Text:  chatCompletion.Choices[0].Message.Content,
 			Audio: speechBase64,
 		},
